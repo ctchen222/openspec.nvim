@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-06-07
+status: draft
+references:
+  upstream:
+    - file: plans/openspec-nvim-upstream-integration.md

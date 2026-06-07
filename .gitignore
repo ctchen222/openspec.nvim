@@ -1,0 +1,12 @@
+.DS_Store
+.luarc.json
+.tests
+doc/tags
+.spectra/
+openspec/.vector-search.db*
+.gstack/
+.gstack/
+
+.agent/
+.cursor/
+.gemini/
