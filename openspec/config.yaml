@@ -1,0 +1,18 @@
+schema: spec-driven
+
+context: |
+  openspec.nvim is a Neovim plugin written in Lua.
+  It provides a reading and navigation layer for OpenSpec artifacts while keeping markdown files as the source of truth.
+  The v1 scope is task progress for openspec/changes/*/tasks.md with no external Neovim plugin dependencies.
+  Prefer small, testable modules and keep public setup options stable.
+
+rules:
+  proposal:
+    - State whether a change affects the public setup API, commands, or default keymaps.
+    - Keep non-goals explicit so the plugin does not grow into an editor distribution.
+  design:
+    - Describe module boundaries and data flow between discovery, parsing, UI, and integrations.
+    - Prefer dependency-free Neovim Lua unless a dependency is required for a specific integration.
+  tasks:
+    - Group implementation, docs, and verification separately.
+    - Mark completed tasks only after the corresponding code or artifact exists.
