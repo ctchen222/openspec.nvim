@@ -26,8 +26,11 @@ Core principles:
 ### 2.1 Change discovery
 
 - Discovery traverses upward from the buffer/CWD to `openspec/changes`.
-- Single change: auto-select.
-- Multiple changes: prompt selection via `vim.ui.select`.
+- Current-context cockpit and handoff commands may auto-select the current
+  change when the buffer is inside `openspec/changes/<change>/`.
+- Summary commands prompt selection via `vim.ui.select`, including the
+  single-change case, so the user always confirms which change is being
+  summarized.
 
 ### 2.2 Parsing and state
 
@@ -47,7 +50,8 @@ Core principles:
 
 ### 2.4 UI output
 
-- `OpenSpecSummary`: unchanged (overview, next task).
+- `OpenSpecSummary`: explicit change selection plus compact spec state,
+  artifact readiness, task progress, next task, and recommended upstream action.
 - `OpenSpecWorkspace`:
   - selected change
   - state/progress summary, artifact digest, sections needing attention

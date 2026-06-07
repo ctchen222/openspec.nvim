@@ -28,10 +28,10 @@ The plugin SHALL expose `require("openspec").setup(opts)` for user configuration
 
 The plugin SHALL discover active OpenSpec changes from the nearest `openspec/changes` directory.
 
-#### Scenario: Current buffer is inside a change
+#### Scenario: Current-context commands infer active change
 
-- **WHEN** the current buffer path is under `openspec/changes/<change>/`
-- **THEN** the plugin selects that change automatically.
+- **WHEN** a current-context command is invoked from a buffer path under `openspec/changes/<change>/`
+- **THEN** the plugin can select that change automatically.
 
 #### Scenario: Multiple active changes are available
 
@@ -60,7 +60,8 @@ The plugin SHALL provide read-only views for OpenSpec task progress.
 #### Scenario: Toggle summary view
 
 - **WHEN** the task summary is opened
-- **THEN** the plugin shows total progress, next task, and sections with remaining todo or work-in-progress tasks in a floating window
+- **THEN** the plugin asks the user to select an active change through `vim.ui.select`, even when only one active change exists
+- **AND** it shows local artifact readiness, spec delta count and names, total progress, next task, recommended upstream action, and sections with remaining todo or work-in-progress tasks in a floating window
 - **AND** invoking the summary action again closes that floating window.
 
 #### Scenario: Open temporary HTML change report
