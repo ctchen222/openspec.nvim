@@ -10,3 +10,6 @@ openspec/.vector-search.db*
 .agent/
 .cursor/
 .gemini/
+
+docs/
+plans/

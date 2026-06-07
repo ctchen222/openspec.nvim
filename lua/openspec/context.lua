@@ -1,3 +1,4 @@
+local config = require("openspec.config")
 local util = require("openspec.util")
 
 local M = {}
@@ -45,6 +46,66 @@ local function spec_paths(change)
   return vim.fn.glob(util.join_path(change.path, "specs", "*", "spec.md"), false, true)
 end
 
+local function present(value)
+  return value ~= nil and tostring(value) ~= ""
+end
+
+local function profile_line(profile)
+  local name = present(profile.name) and profile.name or "Model profile"
+  local details = {}
+  if present(profile.model) then
+    table.insert(details, "model `" .. profile.model .. "`")
+  end
+  if present(profile.effort) then
+    table.insert(details, "effort `" .. profile.effort .. "`")
+  end
+  if present(profile.command) then
+    table.insert(details, "activate `" .. profile.command .. "`")
+  end
+  if present(profile.use_for) then
+    table.insert(details, "use for " .. profile.use_for)
+  end
+
+  if #details == 0 then
+    return "- **" .. name .. "**"
+  end
+  return "- **" .. name .. "**: " .. table.concat(details, "; ")
+end
+
+local function model_routing_lines()
+  local options = config.get()
+  local routing = options.context and options.context.model_routing or {}
+  if routing.enabled == false then
+    return nil
+  end
+
+  local lines = {
+    "Use this section as provider-neutral routing guidance; it does not switch models or control agent sessions by itself.",
+  }
+
+  local profiles = routing.profiles or {}
+  if #profiles > 0 then
+    table.insert(lines, "")
+    table.insert(lines, "### Profiles")
+    table.insert(lines, "")
+    for _, profile in ipairs(profiles) do
+      table.insert(lines, profile_line(profile))
+    end
+  end
+
+  local switch_rules = routing.switch_rules or {}
+  if #switch_rules > 0 then
+    table.insert(lines, "")
+    table.insert(lines, "### Switch Rules")
+    table.insert(lines, "")
+    for _, rule in ipairs(switch_rules) do
+      table.insert(lines, "- " .. rule)
+    end
+  end
+
+  return lines
+end
+
 function M.lines(change, parsed, state)
   local task = state.selected_task
   local git_info = state.git or {}
@@ -67,6 +128,11 @@ function M.lines(change, parsed, state)
     "- Validation: `" .. validation_state .. "`",
     "- Recommended upstream action: `" .. (primary and (primary.command .. " / " .. primary.skill) or "none") .. "`",
   }
+
+  local routing_lines = model_routing_lines()
+  if routing_lines then
+    push_section(lines, "Model Routing", routing_lines)
+  end
 
   table.insert(lines, "")
   table.insert(lines, "## Local Health Findings")

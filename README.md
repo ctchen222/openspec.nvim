@@ -53,9 +53,14 @@ Information ladder:
 
 | Surface | Use it for |
 | --- | --- |
-| `<leader>os` | Fast task progress, next task, and top incomplete sections |
+| `<leader>os` | Explicit change selection, compact spec state, artifact readiness, task progress, next task, and top incomplete sections |
 | `<leader>ow` / `:OpenSpecWorkspace` | Native Neovim cockpit with artifact digest, Git context, local findings, and next upstream action |
 | `<leader>oh` | Full browser-readable proposal, design, spec delta, and tasks dossier |
+
+`<leader>os` always asks which active change to summarize, even when only one
+change with `tasks.md` exists. The summary is intentionally compact: it shows
+local artifact readiness, spec delta count and names, task progress, the next
+task, and the next upstream OpenSpec action to run outside Neovim.
 
 The workspace cockpit is a digest, not a full artifact preview or picker. Use it
 to decide what needs attention, then open the source artifact or HTML report for
@@ -122,8 +127,38 @@ require("openspec").setup({
       enabled = true,
     },
   },
+  context = {
+    model_routing = {
+      enabled = true,
+      profiles = {
+        {
+          name = "Spec planning",
+          model = "gpt-5.5",
+          effort = "xhigh",
+          command = "/model gpt-5.5 xhigh",
+          use_for = "proposal, design, spec delta, task shaping, and scope decisions",
+        },
+        {
+          name = "Task implementation",
+          model = "gpt-5.4",
+          effort = "high",
+          command = "/model gpt-5.4 high",
+          use_for = "code edits, focused tests, documentation updates, and small refactors",
+        },
+      },
+      switch_rules = {
+        "Start with the planning profile only while shaping proposal, design, spec, or tasks.",
+        "Switch to the implementation profile before editing code, tests, or docs.",
+        "Switch back to planning only when scope, requirements, or acceptance criteria are unclear.",
+      },
+    },
+  },
 })
 ```
+
+`context.model_routing` is provider-neutral. `model`, `effort`, and `command`
+are rendered as handoff text only; `openspec.nvim` does not switch external
+agent sessions by itself. Set `enabled = false` to omit the section.
 
 ## Product direction
 

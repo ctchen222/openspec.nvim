@@ -49,5 +49,67 @@ assert(text:find("Verification Commands", 1, true))
 assert(text:find("Stop Conditions", 1, true))
 assert(text:find("Validation:", 1, true))
 assert(text:find("Dirty entries:", 1, true))
+assert(text:find("Model Routing", 1, true))
+assert(text:find("Planning/spec", 1, true))
+assert(text:find("Implementation", 1, true))
+assert(text:find("does not switch models", 1, true))
+
+openspec.setup({
+  commands = false,
+  keymaps = false,
+  health = {
+    validation = {
+      enabled = false,
+    },
+  },
+  context = {
+    model_routing = {
+      profiles = {
+        {
+          name = "Spec planning",
+          model = "gpt-5.5",
+          effort = "xhigh",
+          command = "/model gpt-5.5 xhigh",
+          use_for = "spec decisions before implementation",
+        },
+        {
+          name = "Task implementation",
+          model = "gpt-5.4",
+          effort = "high",
+          command = "/model gpt-5.4 high",
+          use_for = "code edits and focused checks",
+        },
+      },
+      switch_rules = {
+        "Switch after spec approval.",
+      },
+    },
+  },
+})
+
+local custom_text = table.concat(context.lines(change, parsed, health.evaluate(change, parsed, { task = parsed.next_task })), "\n")
+assert(custom_text:find("Spec planning", 1, true))
+assert(custom_text:find("gpt-5.5", 1, true))
+assert(custom_text:find("/model gpt-5.4 high", 1, true))
+assert(custom_text:find("Switch after spec approval.", 1, true))
+assert(not custom_text:find("Verification/audit", 1, true))
+
+openspec.setup({
+  commands = false,
+  keymaps = false,
+  health = {
+    validation = {
+      enabled = false,
+    },
+  },
+  context = {
+    model_routing = {
+      enabled = false,
+    },
+  },
+})
+
+local disabled_text = table.concat(context.lines(change, parsed, health.evaluate(change, parsed, { task = parsed.next_task })), "\n")
+assert(not disabled_text:find("Model Routing", 1, true))
 
 print("context ok")
