@@ -36,24 +36,85 @@ local function section_priority(section)
   return (section.todo * 2) + section.wip
 end
 
-local function summary_lines(parsed)
+local function artifact_flag(item)
+  return item and item.present and "FOUND" or "MISS"
+end
+
+local function summary_state(parsed, digest)
+  local missing = {}
+  if not (digest.proposal and digest.proposal.present) then
+    table.insert(missing, "proposal")
+  end
+  if not (digest.design and digest.design.present) then
+    table.insert(missing, "design")
+  end
+  if not (digest.specs_dir and digest.specs_dir.present) then
+    table.insert(missing, "spec delta")
+  end
+  if not (digest.tasks and digest.tasks.present) then
+    table.insert(missing, "tasks")
+  end
+
+  if #missing > 0 then
+    return "NEEDS ARTIFACTS", "missing " .. table.concat(missing, ", ")
+  end
+  if parsed.total == 0 then
+    return "NO TASKS", "tasks.md has no parsed checkbox tasks"
+  end
+  if parsed.counts.wip > 0 then
+    return "IN PROGRESS", tostring(parsed.counts.wip) .. " task(s) marked WIP"
+  end
+  if parsed.counts.todo > 0 then
+    return "PLANNED", tostring(parsed.counts.todo) .. " task(s) still todo"
+  end
+  return "READY TO VERIFY", "all parsed tasks are done or skipped"
+end
+
+local function summary_upstream_action(change_name, parsed)
+  if parsed.total > 0 and parsed.counts.todo == 0 and parsed.counts.wip == 0 then
+    return "/opsx:verify " .. change_name
+  end
+  return "/opsx:apply " .. change_name
+end
+
+local function summary_lines(change, parsed)
   local counts = parsed.counts
   local remaining = counts.todo + counts.wip
+  local digest = artifacts.collect(change, parsed)
+  local state_label, state_reason = summary_state(parsed, digest)
   local lines = {
-    "OpenSpec change",
+    "OpenSpec Summary",
     parsed.change_name,
     "",
+    "SPEC STATE",
+    "  " .. state_label .. "  " .. state_reason,
+    string.format(
+      "  Artifacts  proposal:%s  design:%s  specs:%s  tasks:%s",
+      artifact_flag(digest.proposal),
+      artifact_flag(digest.design),
+      artifact_flag(digest.specs_dir),
+      artifact_flag(digest.tasks)
+    ),
+    string.format(
+      "  Spec deltas  %d file%s%s",
+      digest.specs_count or 0,
+      (digest.specs_count or 0) == 1 and "" or "s",
+      #(digest.specs_names or {}) > 0 and ("  " .. table.concat(digest.specs_names, ", ")) or ""
+    ),
+    "",
+    "TASK PROGRESS",
     string.format("%s  %d%% complete", progress_bar(parsed.percent, 34), parsed.percent),
     string.format("DONE %d/%d     LEFT %d     TODO %d     WIP %d     SKIP %d", parsed.done, parsed.total, remaining, counts.todo, counts.wip, counts.skipped),
     "",
-    "NEXT ACTION",
+    "NEXT TASK",
   }
 
   if parsed.next_task then
     table.insert(
       lines,
       string.format(
-        "  [%s] %s",
+        "  line %d  [%s] %s",
+        parsed.next_task.lnum,
         tasks.status_label(parsed.next_task.status),
         short_task_text(parsed.next_task.text, 96)
       )
@@ -62,6 +123,9 @@ local function summary_lines(parsed)
     table.insert(lines, "  No remaining todo or WIP tasks.")
   end
 
+  table.insert(lines, "")
+  table.insert(lines, "NEXT UPSTREAM ACTION")
+  table.insert(lines, "  " .. summary_upstream_action(parsed.change_name, parsed))
   table.insert(lines, "")
   table.insert(lines, "SECTIONS NEEDING ATTENTION")
   if remaining == 0 then
@@ -107,7 +171,7 @@ local function summary_lines(parsed)
   end
 
   table.insert(lines, "")
-  table.insert(lines, "Full report  " .. config.get().mappings.html)
+  table.insert(lines, "Workspace  " .. config.get().mappings.workspace .. "    Full report  " .. config.get().mappings.html)
 
   return lines
 end
@@ -125,10 +189,10 @@ local function apply_summary_highlights(buf, lines)
   local highlights = {
     [1] = "Title",
     [2] = "Directory",
-    [4] = "MoreMsg",
-    [5] = "Identifier",
-    [7] = "WarningMsg",
-    [11] = "WarningMsg",
+    [4] = "Identifier",
+    [10] = "MoreMsg",
+    [11] = "Identifier",
+    [13] = "WarningMsg",
     [#lines] = "Comment",
   }
 
@@ -139,7 +203,13 @@ local function apply_summary_highlights(buf, lines)
   end
 
   for index, line in ipairs(lines) do
-    if line:find("^  %[TODO%]") or line:find("todo:%d+") then
+    if line:find("READY TO VERIFY", 1, true) then
+      vim.api.nvim_buf_add_highlight(buf, -1, "MoreMsg", index - 1, 0, -1)
+    elseif line:find("IN PROGRESS", 1, true) then
+      vim.api.nvim_buf_add_highlight(buf, -1, "Question", index - 1, 0, -1)
+    elseif line:find("NEEDS ARTIFACTS", 1, true) or line:find("MISS", 1, true) then
+      vim.api.nvim_buf_add_highlight(buf, -1, "ErrorMsg", index - 1, 0, -1)
+    elseif line:find("^  %[TODO%]") or line:find("todo:%d+") then
       vim.api.nvim_buf_add_highlight(buf, -1, "WarningMsg", index - 1, 0, -1)
     elseif line:find("^  %[WIP%]") or line:find("wip:%d+") then
       vim.api.nvim_buf_add_highlight(buf, -1, "Question", index - 1, 0, -1)
@@ -158,9 +228,9 @@ function M.close_summary()
   return false
 end
 
-function M.open_summary(parsed)
+function M.open_summary(change, parsed)
   local opts = config.get()
-  local lines = summary_lines(parsed)
+  local lines = summary_lines(change, parsed)
   local width, height = summary_window_size(lines, opts)
   local row = math.max(0, math.floor((vim.o.lines - height) / 2) - 1)
   local col = math.max(0, math.floor((vim.o.columns - width) / 2))
@@ -403,8 +473,16 @@ function M._workspace_lines(change, parsed, workflow)
   return workspace_lines(change, parsed, workflow)
 end
 
-function M._summary_lines(parsed)
-  return summary_lines(parsed)
+function M._summary_lines(change, parsed)
+  if parsed == nil then
+    parsed = change
+    change = {
+      name = parsed.change_name,
+      path = util.dirname(parsed.path),
+      tasks_path = parsed.path,
+    }
+  end
+  return summary_lines(change, parsed)
 end
 
 function M._summary_window_size(lines, opts)

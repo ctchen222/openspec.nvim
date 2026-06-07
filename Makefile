@@ -3,6 +3,7 @@
 test:
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/parser_spec.lua
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/discovery_spec.lua
+	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/selection_spec.lua
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/setup_spec.lua
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/setup_custom_spec.lua
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/setup_no_keymaps_spec.lua

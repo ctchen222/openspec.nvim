@@ -9,7 +9,8 @@ local util = require("openspec.util")
 
 local M = {}
 
-local function select_change(callback)
+local function select_change(callback, opts)
+  opts = opts or {}
   local buffer_path = vim.api.nvim_buf_get_name(0)
   local root = discovery.find_root(buffer_path)
 
@@ -23,7 +24,7 @@ local function select_change(callback)
   end
 
   local current_change = discovery.change_from_current_buffer(root)
-  if current_change then
+  if current_change and not opts.always_select then
     callback(current_change)
     return
   end
@@ -34,14 +35,17 @@ local function select_change(callback)
     return
   end
 
-  if #changes == 1 then
+  if #changes == 1 and not opts.always_select then
     callback(changes[1])
     return
   end
 
   vim.ui.select(changes, {
-    prompt = "OpenSpec change",
+    prompt = opts.prompt or "OpenSpec change",
     format_item = function(item)
+      if current_change and item.name == current_change.name then
+        return item.name .. " (current)"
+      end
       return item.name
     end,
   }, function(choice)
@@ -51,7 +55,7 @@ local function select_change(callback)
   end)
 end
 
-local function with_parsed_change(callback)
+local function with_parsed_change(callback, opts)
   select_change(function(change)
     local parsed, err = tasks.parse_change(change)
     if not parsed then
@@ -60,7 +64,7 @@ local function with_parsed_change(callback)
     end
 
     callback(change, parsed)
-  end)
+  end, opts)
 end
 
 local function line_arg(params)
@@ -89,9 +93,9 @@ function M.summary()
     return
   end
 
-  with_parsed_change(function(_, parsed)
-    ui.open_summary(parsed)
-  end)
+  with_parsed_change(function(change, parsed)
+    ui.open_summary(change, parsed)
+  end, { always_select = true, prompt = "OpenSpec summary change" })
 end
 
 function M.html()
