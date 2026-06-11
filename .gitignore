@@ -10,3 +10,8 @@ openspec/.vector-search.db*
 .agent/
 .cursor/
 .gemini/
+
+.nvimlog
+docs/
+plans/
+
