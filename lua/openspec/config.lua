@@ -32,6 +32,26 @@ local defaults = {
       enabled = true,
     },
   },
+  implement = {
+    default_profile = "implementation",
+    profiles = {
+      implementation = {
+        model = "gpt-5.4",
+        effort = "high",
+        layout = "auto",
+      },
+    },
+    providers = {},
+    layouts = {
+      non_tmux = "nvim-right",
+    },
+    tmux = {
+      min_pane_width_for_right = 140,
+    },
+    external = {
+      command_template = nil,
+    },
+  },
 }
 
 local options = vim.deepcopy(defaults)

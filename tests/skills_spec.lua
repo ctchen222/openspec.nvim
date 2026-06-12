@@ -10,6 +10,7 @@ local commands = vim.api.nvim_get_commands({})
 
 assert(commands.OpenSpecWorkspace ~= nil)
 assert(commands.OpenSpecContext ~= nil)
+assert(commands.OpenSpecImplement ~= nil)
 assert(commands.OpenSpecTaskStart ~= nil)
 assert(commands.OpenSpecCurrent ~= nil)
 assert(commands.OpenSpecTaskStatus ~= nil)

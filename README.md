@@ -24,6 +24,7 @@ Prototype plugin. The first public surface focuses on OpenSpec task tracking. Th
 - Show an OpenSpec control cockpit with artifact digest, Git context, local findings, and next recommended upstream action.
 - Generate context packs from the selected/next task without driving OpenSpec lifecycle actions from inside Neovim.
 - Keep OpenSpec artifacts as the source of truth while making terminal-side OpenSpec actions (apply/verify/archive) explicit and auditable.
+- Start implementation sessions with a forced provider/model context through `:OpenSpecImplement`.
 
 ## Installation
 
@@ -71,6 +72,7 @@ Commands:
 :OpenSpecTaskStart
 :OpenSpecContext
 :OpenSpecCurrent
+:OpenSpecImplement
 ```
 
 Use `:OpenSpecTaskStatus {done|todo|wip|skipped} [line]` from an open `tasks.md`
@@ -84,6 +86,7 @@ explicit so task mutation and audit actions are deliberate:
 - `:OpenSpecWorkspace` opens a scratch split workspace for the selected change.
 - `:OpenSpecTaskStart [line]` marks the chosen task as WIP, then opens the workspace cockpit and local findings quickfix.
 - `:OpenSpecContext [line]` opens a scratch Markdown context pack for terminal agents.
+- `:OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<layout>]` launches a new provider session with model and layout resolved before launch.
 - `:OpenSpecCurrent` prints a lightweight current-change summary and the top recommendation.
 
 Agent collaboration pattern:
@@ -120,6 +123,43 @@ require("openspec").setup({
   health = {
     validation = {
       enabled = true,
+    },
+  },
+  implement = {
+    default_profile = "implementation",
+    profiles = {
+      implementation = {
+        model = "gpt-5.5",
+        effort = "high",
+        layout = "auto",
+      },
+    },
+    providers = {
+      codex = {
+        command_template = "codex {model_flag} {context_prompt}",
+        model_flag = "--model {model}",
+        model = "gpt-5.4",
+        effort = "high",
+      },
+      claude = {
+        command_template = "claude {model_flag} {effort_flag} {context_prompt}",
+        model_flag = "--model {model}",
+        effort_flag = "--effort {effort}",
+        model = "sonnet",
+        effort = "high",
+      },
+      opencode = {
+        command_template = "opencode --context {context_file} --model {model} --effort {effort}",
+      },
+    },
+    layouts = {
+      non_tmux = "nvim-right",
+    },
+    tmux = {
+      min_pane_width_for_right = 140,
+    },
+    external = {
+      command_template = nil,
     },
   },
 })

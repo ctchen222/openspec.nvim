@@ -94,6 +94,12 @@ function M.lines(change, parsed, state)
     "- `make check` when available, otherwise the closest documented project check.",
   })
 
+  push_section(lines, "Model Control Guidance", {
+    "- Model guidance in this context is advisory for copied sessions.",
+    "- Existing Codex/Claude sessions started separately will not auto-switch model from pasted text.",
+    "- To enforce model selection, run `:OpenSpecImplement` (for example `:OpenSpecImplement codex profile=implementation`).",
+  })
+
   push_section(lines, "Stop Conditions", {
     "- Stop if implementation requires expanding the selected task scope.",
     "- Stop if a referenced file is missing and the correct replacement is unclear.",
