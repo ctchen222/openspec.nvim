@@ -30,7 +30,7 @@ Prototype plugin. The first public surface focuses on OpenSpec task tracking. Th
 
 `:OpenSpecImplement` resolves the current change context, selects the provider and model from your profile, and launches a new implementation session in a tmux or Neovim split — no manual copy-paste required.
 
-![OpenSpecImplement Demo](OpenSpecImplement%20demo.mp4)
+![OpenSpecImplement Demo](OpenSpecImplement%20demo.gif)
 
 ## Installation
 
