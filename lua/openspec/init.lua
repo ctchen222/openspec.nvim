@@ -5,6 +5,7 @@ local health = require("openspec.health")
 local html = require("openspec.html")
 local tasks = require("openspec.tasks")
 local ui = require("openspec.ui")
+local implement = require("openspec.implement")
 local util = require("openspec.util")
 
 local M = {}
@@ -202,6 +203,20 @@ function M.context(params)
   end)
 end
 
+function M.implement(params)
+  if not params.fargs or #params.fargs == 0 then
+    util.notify("Usage: :OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<layout>]", vim.log.levels.ERROR)
+    return
+  end
+
+  with_parsed_change(function(change, parsed)
+    local state = health.evaluate(change, parsed, { task = parsed.next_task })
+    local lines = context.lines(change, parsed, state)
+    local task = state.task or parsed.next_task
+    implement.start(change.name, task, lines, params.fargs)
+  end)
+end
+
 function M.current()
   with_parsed_change(function(change, parsed)
     local state = health.evaluate(change, parsed, {})
@@ -278,6 +293,11 @@ local function create_commands()
     desc = "Open an upstream action context pack",
     force = true,
     nargs = "?",
+  })
+  vim.api.nvim_create_user_command("OpenSpecImplement", M.implement, {
+    desc = "Launch a provider implementation session with resolved model settings",
+    force = true,
+    nargs = "+",
   })
   vim.api.nvim_create_user_command("OpenSpecCurrent", M.current, {
     desc = "Report current OpenSpec change health",
