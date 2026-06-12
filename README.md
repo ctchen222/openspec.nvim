@@ -26,6 +26,12 @@ Prototype plugin. The first public surface focuses on OpenSpec task tracking. Th
 - Keep OpenSpec artifacts as the source of truth while making terminal-side OpenSpec actions (apply/verify/archive) explicit and auditable.
 - Start implementation sessions with a forced provider/model context through `:OpenSpecImplement`.
 
+## Demo
+
+`:OpenSpecImplement` resolves the current change context, selects the provider and model from your profile, and launches a new implementation session in a tmux or Neovim split — no manual copy-paste required.
+
+<video src="OpenSpecImplement demo.mov" controls width="100%"></video>
+
 ## Installation
 
 With `lazy.nvim` from a local checkout:
