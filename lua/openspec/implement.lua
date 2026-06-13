@@ -5,11 +5,13 @@ local M = {}
 
 local BUILTIN_ADAPTERS = {
   codex = {
-    command_template = "codex {model_flag} {context_prompt}",
+    command_template = "codex {model_flag} {effort_flag} {initial_prompt}",
     model_flag = "--model {model}",
+    effort_flag = "-c model_reasoning_effort={effort}",
     model = "gpt-5.4",
     effort = "high",
     layout = "auto",
+    goal = "off",
   },
   claude = {
     command_template = "claude {model_flag} {effort_flag} {context_prompt}",
@@ -22,6 +24,17 @@ local BUILTIN_ADAPTERS = {
 }
 
 local LOG_PATH = (vim.env.TMPDIR or "/tmp") .. "/openspec-implement.log"
+
+local GOAL_MODES = {
+  off = true,
+  auto = true,
+  copy = true,
+}
+
+local GOAL_PROMPT_MAX_LEN = 4000
+
+local codex_model_catalog_cache = nil
+local codex_model_catalog_error = nil
 
 local function append_log(message)
   local ts = os.date("!%Y-%m-%dT%H:%M:%SZ")
@@ -53,6 +66,298 @@ local function to_pane_title(value)
   return value
 end
 
+local function normalize_goal_mode(value)
+  if value == nil then
+    return nil
+  end
+
+  local normalized = value:lower()
+  if normalized == "true" then
+    return "auto"
+  end
+  if normalized == "false" then
+    return "off"
+  end
+  if GOAL_MODES[normalized] then
+    return normalized
+  end
+
+  return nil, "Unsupported goal mode: " .. value .. ". Supported values: off, auto, copy."
+end
+
+local function join_sorted(values)
+  local normalized = {}
+  for _, value in ipairs(values) do
+    table.insert(normalized, tostring(value))
+  end
+  table.sort(normalized)
+  return table.concat(normalized, ", ")
+end
+
+local function extract_json_blob(raw)
+  local start = raw:find("%[") or raw:find("{")
+  if not start then
+    return nil
+  end
+
+  local opener = raw:sub(start, start)
+  local closer = (opener == "[") and "]" or "}"
+  local depth = 0
+  local in_string = false
+  local escape = false
+
+  for i = start, #raw do
+    local ch = raw:sub(i, i)
+
+    if in_string then
+      if escape then
+        escape = false
+      elseif ch == "\\" then
+        escape = true
+      elseif ch == '"' then
+        in_string = false
+      end
+    else
+      if ch == '"' then
+        in_string = true
+      elseif ch == opener then
+        depth = depth + 1
+      elseif ch == closer then
+        depth = depth - 1
+        if depth == 0 then
+          return raw:sub(start, i)
+        end
+      end
+    end
+  end
+
+  return raw:sub(start)
+end
+
+local function is_list_like(values)
+  if type(values) ~= "table" then
+    return false
+  end
+  if #values == 0 then
+    return false
+  end
+  for idx = 1, #values do
+    if values[idx] == nil then
+      return false
+    end
+  end
+  return true
+end
+
+local effort_field_candidates = {
+  "effort",
+  "reasoning_effort",
+  "reasoning",
+  "level",
+  "name",
+  "slug",
+  "id",
+  "value",
+}
+
+local function coerce_to_effort_value(raw_value, depth)
+  depth = depth or 0
+  if type(raw_value) == "string" or type(raw_value) == "number" then
+    local normalized = trim(tostring(raw_value))
+    if normalized ~= "" then
+      return normalized
+    end
+  end
+
+  if type(raw_value) ~= "table" or depth > 3 then
+    return nil
+  end
+
+  for _, key in ipairs(effort_field_candidates) do
+    local nested = raw_value[key]
+    local normalized = coerce_to_effort_value(nested, depth + 1)
+    if normalized then
+      return normalized
+    end
+  end
+
+  for key, nested in pairs(raw_value) do
+    if key == "description" then
+      goto continue
+    end
+    local normalized = coerce_to_effort_value(nested, depth + 1)
+    if normalized then
+      return normalized
+    end
+    ::continue::
+  end
+
+  return nil
+end
+
+local function parse_codex_model_efforts(raw)
+  local efforts = {}
+  if type(raw) ~= "table" then
+    return efforts
+  end
+
+  for _, effort in ipairs(raw) do
+    local normalized = coerce_to_effort_value(effort)
+    if normalized then
+      efforts[normalized] = true
+    end
+  end
+
+  -- Backward compatibility: support map-style payloads like { low = true, medium = true }.
+  for effort_key, supported in pairs(raw) do
+    if type(effort_key) == "string" and effort_key:match("^[a-z][a-z0-9]*$") then
+      if type(supported) == "table" then
+        efforts[effort_key] = true
+      end
+
+      if supported == true then
+        efforts[effort_key] = true
+      elseif type(supported) == "table" then
+        local normalized = coerce_to_effort_value(supported)
+        if normalized then
+          efforts[normalized] = true
+        end
+      elseif type(supported) == "string" or type(supported) == "number" then
+        efforts[effort_key] = true
+      end
+    end
+  end
+
+  return efforts
+end
+
+local function normalize_model_catalog(models)
+  local catalog = {}
+  if type(models) ~= "table" then
+    return catalog
+  end
+
+  for _, model in ipairs(models) do
+    if type(model) == "table" then
+      local slug = model.slug or model.name or model.model
+      if slug then
+        local effort_values = model.supported_reasoning_levels
+          or model.supported_levels
+          or model.reasoning_levels
+          or model.efforts
+        catalog[tostring(slug)] = parse_codex_model_efforts(effort_values)
+      end
+    end
+  end
+
+  return catalog
+end
+
+local function normalize_model_catalog_input(models)
+  local catalog = normalize_model_catalog(models)
+  if not vim.tbl_isempty(catalog) then
+    return catalog
+  end
+
+  catalog = {}
+  if type(models) ~= "table" then
+    return catalog
+  end
+
+  for model, efforts in pairs(models) do
+    if type(model) == "string" and efforts then
+      local effort_values = efforts
+      if type(efforts) == "table" and not is_list_like(efforts) then
+        effort_values = efforts.supported_reasoning_levels
+          or efforts.supported_levels
+          or efforts.reasoning_levels
+          or efforts.efforts
+          or efforts
+      end
+      catalog[tostring(model)] = parse_codex_model_efforts(effort_values)
+    end
+  end
+
+  return catalog
+end
+
+local function decode_codex_models(raw)
+  local normalized_raw = trim(raw)
+  local json_blob = extract_json_blob(normalized_raw)
+  if json_blob then
+    normalized_raw = json_blob
+  end
+
+  local ok, decoded = pcall(vim.json.decode, normalized_raw)
+  if not ok and normalized_raw ~= raw then
+    local fallback = extract_json_blob(raw)
+    if not fallback then
+      fallback = raw
+    end
+    ok, decoded = pcall(vim.json.decode, fallback)
+  end
+  if not ok or type(decoded) ~= "table" then
+    return nil, "Unable to parse Codex model catalog response."
+  end
+
+  local models = decoded.models or decoded
+  if type(models) ~= "table" then
+    return nil, "Unexpected Codex model catalog shape."
+  end
+
+  local catalog = normalize_model_catalog(models)
+  if vim.tbl_isempty(catalog) then
+    return nil, "Codex model catalog has no supported models."
+  end
+  return catalog, nil
+end
+
+local function load_codex_models_from_cli()
+  local commands = {
+    { "codex", "debug", "models" },
+    { "codex", "debug", "models", "--bundled" },
+  }
+
+  for _, command in ipairs(commands) do
+    local output = vim.fn.systemlist(command)
+    if vim.v.shell_error == 0 then
+      local raw = table.concat(output, "\n")
+      if trim(raw) ~= "" then
+        local catalog, err = decode_codex_models(raw)
+        if catalog then
+          return catalog, nil
+        end
+        codex_model_catalog_error = err
+      end
+    else
+      local msg = table.concat(output, "\n")
+      if trim(msg) ~= "" then
+        codex_model_catalog_error = trim(msg)
+      end
+    end
+  end
+
+  return nil, codex_model_catalog_error or "Unable to load Codex model catalog."
+end
+
+function M._load_codex_models(opts)
+  if opts and opts.codex_models then
+    return normalize_model_catalog_input(opts.codex_models), nil
+  end
+
+  if codex_model_catalog_cache then
+    return codex_model_catalog_cache, nil
+  end
+
+  local catalog, err = load_codex_models_from_cli()
+  if not catalog then
+    return nil, err
+  end
+
+  codex_model_catalog_cache = catalog
+  return catalog, nil
+end
+
 function M._merge_provider(provider)
   local configured = config.get().implement and config.get().implement.providers or {}
   local base = vim.tbl_deep_extend("force", vim.deepcopy(BUILTIN_ADAPTERS[provider] or {}), configured[provider] or {})
@@ -69,7 +374,8 @@ end
 
 function M.parse_args(fargs)
   if not fargs or #fargs == 0 then
-    return nil, "Usage: :OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<layout>]"
+    return nil,
+      "Usage: :OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<auto|tmux-right|tmux-bottom|nvim-right|nvim-bottom|external|copy>] [goal=<off|auto|copy|true|false>]"
   end
 
   local args = {
@@ -78,6 +384,7 @@ function M.parse_args(fargs)
     model = nil,
     effort = nil,
     layout = nil,
+    goal = nil,
   }
 
   for i = 2, #fargs do
@@ -85,7 +392,7 @@ function M.parse_args(fargs)
     if not key then
       return nil, "Invalid argument: " .. fargs[i]
     end
-    if key == "profile" or key == "model" or key == "effort" or key == "layout" then
+    if key == "profile" or key == "model" or key == "effort" or key == "layout" or key == "goal" then
       args[key] = value
     else
       return nil, "Unsupported argument key: " .. key
@@ -153,6 +460,18 @@ function M.resolve_settings(args)
     or provider_cfg.layout
     or "auto"
 
+  local goal_candidate = args.goal
+  if goal_candidate == nil then
+    goal_candidate = (profile_cfg and profile_cfg.goal)
+      or (default_profile_cfg and default_profile_cfg.goal)
+      or impl.goal
+      or provider_cfg.goal
+  end
+  local goal, goal_err = normalize_goal_mode(goal_candidate or "off")
+  if not goal then
+    return nil, goal_err
+  end
+
   local valid_layouts = {
     ["auto"] = true,
     ["tmux-right"] = true,
@@ -163,7 +482,7 @@ function M.resolve_settings(args)
     ["copy"] = true,
   }
   if not valid_layouts[layout] then
-    return nil, "Unsupported layout: " .. layout
+    return nil, "Unsupported layout: " .. layout .. ". Supported layouts: auto, tmux-right, tmux-bottom, nvim-right, nvim-bottom, external, copy."
   end
 
   return {
@@ -172,6 +491,7 @@ function M.resolve_settings(args)
     model = model,
     effort = effort,
     layout = layout,
+    goal = goal,
     provider_cfg = provider_cfg,
   }
 end
@@ -191,6 +511,126 @@ local function build_context_prompt(context_file)
   }, " ")
 end
 
+local function build_apply_invocation(change_name)
+  local change_label = change_name or "this change"
+  local opsx_invocation = "`/opsx:apply " .. change_label .. "`"
+  return opsx_invocation
+end
+
+local function build_apply_prompt(change_name, task, context_file)
+  local task_label = ""
+  if task then
+    task_label = table.concat({
+      "Task:",
+      "[" .. (task.section or "task") .. "]",
+      trim(task.text or ""),
+    }, " ")
+  end
+
+  local change_label = change_name or "this change"
+  local apply_invocation = build_apply_invocation(change_label)
+  local parts = {
+    "Use",
+    apply_invocation,
+    "for",
+    change_label .. ".",
+    "Read and use the implementation context in",
+    context_file .. ".",
+    "Treat that file as the source of truth for this session.",
+    "Start implementation now without waiting for another user confirmation.",
+    "Verify with `make check` and `openspec validate --all --strict`.",
+    "If requirements are missing, unrelated dirty files are detected, scope must expand,",
+    "the repository state is unsafe, or verification fails, stop and request human input.",
+  }
+
+  if task_label ~= "" then
+    table.insert(parts, 3, task_label)
+  end
+
+  return table.concat(parts, " ")
+end
+
+local function build_goal_objective(change_name, task, context_file)
+  local change_label = change_name or "this change"
+  local apply_invocation = build_apply_invocation(change_label)
+  local task_line = ""
+  if task then
+    task_line = table.concat({
+      "Selected task:",
+      "[" .. (task.section or "task") .. "]",
+      trim(task.text or ""),
+    }, " ")
+  else
+    task_line = "No explicit task selected. Use the context file to identify the next task."
+  end
+
+  local parts = {
+    "Implement OpenSpec change",
+    change_label .. ".",
+    task_line,
+    "Use this command:",
+    apply_invocation .. ".",
+    "Read the implementation context from",
+    context_file .. ".",
+    "Completion criteria:",
+    "context implemented, tests pass, and no unintended files are edited.",
+    "Run `make check` and `openspec validate --all --strict`.",
+    "Stop and request human input if requirements are missing, scope needs expansion,",
+    "dirty files are unrelated, verification fails, or repo state is unsafe.",
+  }
+
+  return table.concat(parts, " ")
+end
+
+function M.build_goal_prompt(change_name, task, context_file)
+  local objective = build_goal_objective(change_name, task, context_file)
+  if #objective > GOAL_PROMPT_MAX_LEN then
+    return nil, nil, "Goal objective exceeds Codex goal limit of " .. GOAL_PROMPT_MAX_LEN .. " chars."
+  end
+  return "/goal " .. objective, objective, nil
+end
+
+function M.validate_settings(settings, opts)
+  if settings.provider == "codex" then
+    local catalog, err = M._load_codex_models(opts)
+    if not catalog then
+      return nil, "Failed to validate Codex launch settings: " .. tostring(err)
+    end
+
+    local model = settings.model
+    if not catalog[model] then
+      local supported = {}
+      for model_name in pairs(catalog) do
+        table.insert(supported, model_name)
+      end
+      return nil, "Codex model not available: " .. tostring(model) .. ". Supported models: " .. join_sorted(supported)
+    end
+
+    local supported_efforts = catalog[model]
+    local effort = tostring(settings.effort)
+    if not supported_efforts[effort] then
+      local effort_values = {}
+      for effort_value in pairs(supported_efforts) do
+        table.insert(effort_values, effort_value)
+      end
+      local normalized_attempts = join_sorted(effort_values)
+      if #effort_values == 0 then
+        return nil, "Unsupported Codex effort '" .. effort .. "' for model " .. tostring(model) .. ". No reasoning effort metadata found for this model."
+      end
+      return nil,
+        "Unsupported Codex effort '" .. effort .. "' for model " .. tostring(model) .. ". " ..
+        "Available efforts for this model: " .. normalized_attempts
+    end
+    return true
+  end
+
+  if settings.goal and settings.goal ~= "off" then
+    return nil, "Goal handoff is only supported for provider 'codex'."
+  end
+
+  return true
+end
+
 function M.build_provider_command(provider, settings, context_file)
   local provider_cfg = M._merge_provider(provider)
   local command_template = provider_cfg.command_template
@@ -198,13 +638,44 @@ function M.build_provider_command(provider, settings, context_file)
     return nil, "No command template configured for provider: " .. provider
   end
 
+  local has_initial_prompt = command_template:find("{initial_prompt}") ~= nil
+  local has_context_prompt = command_template:find("{context_prompt}") ~= nil
+  local has_goal_prompt = command_template:find("{goal_prompt}") ~= nil
+  if settings.provider == "codex" and not (has_initial_prompt or has_context_prompt or has_goal_prompt) then
+    return nil, "Provider template must include {initial_prompt}, {context_prompt}, or {goal_prompt} for Codex launch."
+  end
+  if settings.provider == "codex" and settings.goal == "auto" and not (has_initial_prompt or has_goal_prompt) then
+    return nil, "Codex goal=auto requires {initial_prompt} or {goal_prompt} in the command template."
+  end
+
   local model_flag = provider_cfg.model_flag
   local effort_flag = provider_cfg.effort_flag
   local model = settings.model
   local effort = settings.effort
+  local change_name = settings.change_name or "this change"
+  local task = settings.task
+  local goal_mode = settings.goal or "off"
+  local goal_prompt = settings.goal_prompt
+
+  if goal_mode == "auto" and not goal_prompt then
+    return nil, "Goal mode auto requires a generated goal prompt."
+  end
+
+  local apply_prompt = build_apply_prompt(change_name, task, context_file)
+  local initial_prompt = apply_prompt
+  if goal_mode == "auto" and goal_prompt then
+    initial_prompt = goal_prompt
+  end
+
+  local context_prompt = build_context_prompt(context_file)
+  if provider == "codex" then
+    context_prompt = apply_prompt
+  end
 
   local context_file_value = vim.fn.shellescape(context_file)
-  local context_prompt_value = vim.fn.shellescape(build_context_prompt(context_file))
+  local context_prompt_value = vim.fn.shellescape(context_prompt)
+  local initial_prompt_value = vim.fn.shellescape(initial_prompt)
+  local goal_prompt_value = goal_prompt and vim.fn.shellescape(goal_prompt) or ""
   local model_value = model and vim.fn.shellescape(model) or ""
   local effort_value = effort and vim.fn.shellescape(effort) or ""
   local model_flag_value = ""
@@ -221,6 +692,8 @@ function M.build_provider_command(provider, settings, context_file)
     context_file = context_file_value,
     context = context_file_value,
     context_prompt = context_prompt_value,
+    initial_prompt = initial_prompt_value,
+    goal_prompt = goal_prompt_value,
     model = model_value,
     effort = effort_value,
     model_flag = model_flag_value,
@@ -246,16 +719,22 @@ function M.preview_text(plan)
   if #command > 220 then
     command = command:sub(1, 220) .. "..."
   end
+  local goal_summary = plan.goal_summary
+  if goal_summary and #goal_summary > 160 then
+    goal_summary = goal_summary:sub(1, 160) .. "..."
+  end
   return table.concat({
     "OpenSpecImplement launch preview",
     "",
     "Provider: " .. plan.provider,
     "Model: " .. (plan.model or "(default)"),
     "Effort: " .. (plan.effort or "(default)"),
+    "Goal mode: " .. (plan.goal_mode or "off"),
     "Layout: " .. plan.layout,
     "Change: " .. plan.change_name,
     "Task: " .. label,
     "Context file: " .. plan.context_file,
+    goal_summary and ("Goal objective: " .. goal_summary) or "Goal objective: (not enabled)",
     "",
     "Command:",
     command,
@@ -338,6 +817,15 @@ function M._launch_nvim_split(plan, direction)
 end
 
 function M._launch_copy(plan)
+  if plan.goal_mode and plan.goal_mode ~= "off" and plan.goal_command then
+    local payload = {
+      "# OpenSpecImplement goal fallback",
+      "Goal command: " .. plan.goal_command,
+    }
+    vim.fn.setreg("+", table.concat(payload, "\n"))
+    return true
+  end
+
   local payload = {
     "# OpenSpecImplement launch",
     "Provider: " .. plan.provider,
@@ -398,6 +886,19 @@ function M.launch_plan(plan, opts)
     util.notify("OpenSpecImplement launch cancelled.")
     return { launched = false, cancelled = true }
   end
+
+  if plan.goal_mode and plan.goal_mode ~= "off" and plan.goal_command then
+    local ok, err = pcall(vim.fn.setreg, "+", plan.goal_command)
+    if not ok then
+      if plan.goal_mode == "auto" then
+        util.notify("Goal handoff copy failed, continuing launch.", vim.log.levels.WARN)
+      else
+        util.notify("Goal handoff copy failed: " .. tostring(err), vim.log.levels.WARN)
+      end
+      append_log("Goal handoff copy failed: " .. tostring(err))
+    end
+  end
+
   local execute = opts and opts.execute or M.execute
   local launched = execute(plan)
   if not launched then
@@ -422,6 +923,12 @@ function M.start(change_name, task, context_lines, fargs, opts)
     return nil, settings_err
   end
 
+  local valid, valid_err = M.validate_settings(settings, opts)
+  if not valid then
+    util.notify(valid_err, vim.log.levels.ERROR)
+    return nil, valid_err
+  end
+
   local layout = M.resolve_layout(settings.layout, M._tmux_layout(), config.get().implement)
   settings.layout = layout
 
@@ -430,6 +937,21 @@ function M.start(change_name, task, context_lines, fargs, opts)
   if not context_file then
     util.notify("Failed to create context temp file: " .. context_err, vim.log.levels.ERROR)
     return nil, context_err
+  end
+
+  settings.change_name = change_name
+  settings.task = task
+
+  local goal_command = nil
+  local goal_summary = nil
+  if settings.goal ~= "off" then
+    local err_goal
+    goal_command, goal_summary, err_goal = M.build_goal_prompt(change_name, task, context_file)
+    if not goal_command then
+      util.notify(err_goal, vim.log.levels.ERROR)
+      return nil, err_goal
+    end
+    settings.goal_prompt = goal_command
   end
 
   local rendered_command, command_err = M.build_provider_command(args.provider, settings, context_file)
@@ -451,6 +973,9 @@ function M.start(change_name, task, context_lines, fargs, opts)
     change_name = change_name,
     context_file = context_file,
     command = rendered_command,
+    goal_mode = settings.goal,
+    goal_command = goal_command,
+    goal_summary = goal_summary,
   }
 
   return M.launch_plan(plan, opts)
