@@ -92,13 +92,15 @@ explicit so task mutation and audit actions are deliberate:
 - `:OpenSpecWorkspace` opens a scratch split workspace for the selected change.
 - `:OpenSpecTaskStart [line]` marks the chosen task as WIP, then opens the workspace cockpit and local findings quickfix.
 - `:OpenSpecContext [line]` opens a scratch Markdown context pack for terminal agents.
-- `:OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<layout>]` launches a new provider session with model and layout resolved before launch.
+- `:OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<auto|tmux-right|tmux-bottom|nvim-right|nvim-bottom|external|copy>] [goal=<off|auto|copy|true|false>]` launches a new provider session with model, goal mode and layout resolved before launch.
 - `:OpenSpecCurrent` prints a lightweight current-change summary and the top recommendation.
 
 Agent collaboration pattern:
 
 - `:OpenSpecTaskStart` and `:OpenSpecWorkspace` keep task context local.
-- `/opsx:apply <change>` or `$openspec-apply-change <change>` executes upstream implementation flow outside Neovim.
+- `/opsx:apply <change>` executes upstream implementation flow outside Neovim.
+- In skill-enabled integrations (e.g. Kimi CLI, Trae), the equivalent command may be
+  `/skill:openspec-apply-change <change>`.
 - `/opsx:verify <change>` and `/opsx:archive <change>` are recommended when tasks are complete and validation passes.
 - Use `:OpenSpecContext` when you need a focused handoff buffer for terminal automation.
 
@@ -142,7 +144,8 @@ require("openspec").setup({
     },
     providers = {
       codex = {
-        command_template = "codex {model_flag} {context_prompt}",
+        command_template = "codex {model_flag} {effort_flag} {initial_prompt}",
+        effort_flag = "-c model_reasoning_effort={effort}",
         model_flag = "--model {model}",
         model = "gpt-5.4",
         effort = "high",
