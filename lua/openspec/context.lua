@@ -52,6 +52,14 @@ function M.lines(change, parsed, state)
   local validation_state = validation.ok and "passed" or (validation.enabled == false and "disabled" or "failed")
   local recommendation = state.recommendations or {}
   local primary = recommendation[1]
+  local recommendation_text = "none"
+  if primary then
+    if primary.skill and primary.skill ~= "" and primary.skill ~= primary.command then
+      recommendation_text = primary.command .. " / " .. primary.skill
+    else
+      recommendation_text = primary.command
+    end
+  end
   local lines = {
     "# OpenSpec Upstream Context",
     "",
@@ -65,7 +73,7 @@ function M.lines(change, parsed, state)
     "- Branch: `" .. (git_info.branch or "(unknown)") .. "`",
     "- Dirty entries: " .. tostring(#(git_info.dirty or {})),
     "- Validation: `" .. validation_state .. "`",
-    "- Recommended upstream action: `" .. (primary and (primary.command .. " / " .. primary.skill) or "none") .. "`",
+    "- Recommended upstream action: `" .. recommendation_text .. "`",
   }
 
   table.insert(lines, "")

@@ -216,7 +216,6 @@ local function apply_recommendation(state, parsed, cli_state)
       recommendations,
       {
         command = "/opsx:verify " .. state.change_name,
-        skill = "$openspec-verify-change " .. state.change_name,
         reason = "All tasks are complete; verify OpenSpec health before archive.",
       }
     )
@@ -224,7 +223,6 @@ local function apply_recommendation(state, parsed, cli_state)
       recommendations,
       {
         command = "/opsx:archive " .. state.change_name,
-        skill = "$openspec-archive-change " .. state.change_name,
         reason = "If verify passes, archive this change.",
       }
     )
@@ -236,7 +234,6 @@ local function apply_recommendation(state, parsed, cli_state)
       recommendations,
       {
         command = "/opsx:apply " .. state.change_name,
-        skill = "$openspec-apply-change " .. state.change_name,
         reason = "Continue implementation for this change.",
       }
     )
@@ -247,7 +244,6 @@ local function apply_recommendation(state, parsed, cli_state)
     recommendations,
     {
       command = "/opsx:continue " .. state.change_name,
-      skill = "$openspec-continue " .. state.change_name,
       reason = "No remaining tasks parsed; inspect artifact completeness and re-run status.",
     }
   )

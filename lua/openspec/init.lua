@@ -205,7 +205,7 @@ end
 
 function M.implement(params)
   if not params.fargs or #params.fargs == 0 then
-    util.notify("Usage: :OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<layout>]", vim.log.levels.ERROR)
+    util.notify("Usage: :OpenSpecImplement {provider} [profile=<name>] [model=<model>] [effort=<effort>] [layout=<layout>] [goal=<off|auto|copy>]", vim.log.levels.ERROR)
     return
   end
 

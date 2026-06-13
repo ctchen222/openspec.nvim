@@ -34,6 +34,7 @@ local defaults = {
   },
   implement = {
     default_profile = "implementation",
+    goal = "off",
     profiles = {
       implementation = {
         model = "gpt-5.4",
