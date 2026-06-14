@@ -86,11 +86,19 @@ function M.lines(change, parsed, state)
     end
   end
 
-  push_section(lines, "Allowed Scope", {
-    "- Implement only the selected task.",
-    "- Update OpenSpec artifacts only when implementation proves the task/spec is stale or incomplete.",
-    "- Touch code, tests, and docs that directly support the selected task.",
-  })
+  if task then
+    push_section(lines, "Allowed Scope", {
+      "- Implement only the selected task.",
+      "- Update OpenSpec artifacts only when implementation proves the task/spec is stale or incomplete.",
+      "- Touch code, tests, and docs that directly support the selected task.",
+    })
+  else
+    push_section(lines, "Allowed Scope", {
+      "- Implement all tasks in this change in order.",
+      "- Update OpenSpec artifacts only when implementation proves a task or spec is stale or incomplete.",
+      "- Touch code, tests, and docs that directly support each task.",
+    })
+  end
 
   push_section(lines, "Forbidden Scope", {
     "- Do not treat this buffer as approval to run lifecycle actions.",
@@ -108,12 +116,20 @@ function M.lines(change, parsed, state)
     "- To enforce model selection, run `:OpenSpecImplement` (for example `:OpenSpecImplement codex profile=implementation`).",
   })
 
-  push_section(lines, "Stop Conditions", {
-    "- Stop if implementation requires expanding the selected task scope.",
-    "- Stop if a referenced file is missing and the correct replacement is unclear.",
-    "- Stop if local changes cannot be mapped back to the selected task.",
-    "- Stop if validation or project checks fail after a focused fix attempt.",
-  })
+  if task then
+    push_section(lines, "Stop Conditions", {
+      "- Stop if implementation requires expanding the selected task scope.",
+      "- Stop if a referenced file is missing and the correct replacement is unclear.",
+      "- Stop if local changes cannot be mapped back to the selected task.",
+      "- Stop if validation or project checks fail after a focused fix attempt.",
+    })
+  else
+    push_section(lines, "Stop Conditions", {
+      "- Stop if a referenced file is missing and the correct replacement is unclear.",
+      "- Stop if validation or project checks fail after a focused fix attempt.",
+      "- Stop and request human input if scope needs expansion beyond the tasks listed in this change.",
+    })
+  end
 
   push_section(lines, "Proposal", excerpt(artifact_path(change, "proposal.md"), 80))
   push_section(lines, "Design", excerpt(artifact_path(change, "design.md"), 120))

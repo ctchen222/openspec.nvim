@@ -41,12 +41,14 @@ local change = {
 
 local parsed = tasks.parse_change(change)
 local state = health.evaluate(change, parsed)
+local whole_change_state = health.evaluate(change, parsed, { task = nil, fallback_to_next_task = false })
 
 assert(state.cli and state.cli.enabled == false, "CLI disabled in this test context")
 assert(#state.findings >= 1)
 assert(state.findings[1].category == "openspec")
 assert(state.recommendations[1].command:find("/opsx:apply", 1, true))
 assert(state.selected_task and state.selected_task.text:find("Keep plugin healthy", 1, true))
+assert(whole_change_state.selected_task == nil)
 assert(vim.tbl_isempty(state.findings) == false)
 
 cli.has_executable = original_has_executable

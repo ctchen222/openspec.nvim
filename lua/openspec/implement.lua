@@ -545,6 +545,8 @@ local function build_apply_prompt(change_name, task, context_file)
 
   if task_label ~= "" then
     table.insert(parts, 3, task_label)
+  else
+    table.insert(parts, 3, "Implement all tasks in this change in order.")
   end
 
   return table.concat(parts, " ")
@@ -561,7 +563,7 @@ local function build_goal_objective(change_name, task, context_file)
       trim(task.text or ""),
     }, " ")
   else
-    task_line = "No explicit task selected. Use the context file to identify the next task."
+    task_line = "No task selected. Implement all tasks in this change in order."
   end
 
   local parts = {

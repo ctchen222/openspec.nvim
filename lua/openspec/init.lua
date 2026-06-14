@@ -210,10 +210,14 @@ function M.implement(params)
   end
 
   with_parsed_change(function(change, parsed)
-    local state = health.evaluate(change, parsed, { task = parsed.next_task })
+    local current = util.normalize_path(vim.api.nvim_buf_get_name(0))
+    local selected_task = nil
+    if current == change.tasks_path then
+      selected_task = select_task(parsed, vim.fn.line("."))
+    end
+    local state = health.evaluate(change, parsed, { task = selected_task, fallback_to_next_task = false })
     local lines = context.lines(change, parsed, state)
-    local task = state.task or parsed.next_task
-    implement.start(change.name, task, lines, params.fargs)
+    implement.start(change.name, selected_task, lines, params.fargs)
   end)
 end
 
