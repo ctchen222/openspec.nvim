@@ -147,6 +147,7 @@ end
 local function open_artifact_from_change(change, kind, source_window, opts)
   opts = opts or {}
   local close_archive_views = opts.close_archive_views == true
+  local close_summary = opts.close_summary == true
 
   local candidates = artifacts.resolve_artifact_targets(change, kind)
   if #candidates == 0 then
@@ -173,6 +174,9 @@ local function open_artifact_from_change(change, kind, source_window, opts)
         if opened and close_archive_views then
           M.close_archive_views()
         end
+        if opened and close_summary then
+          M.close_summary()
+        end
       end
     end)
     return true
@@ -181,6 +185,9 @@ local function open_artifact_from_change(change, kind, source_window, opts)
   local opened = open_artifact_target(candidates[1], source_window, change.name)
   if opened and close_archive_views then
     M.close_archive_views()
+  end
+  if opened and close_summary then
+    M.close_summary()
   end
   return opened
 end
@@ -398,16 +405,16 @@ end
 local function install_summary_keymaps(buf, change, source_window)
   local options = { buffer = buf, noremap = true, silent = true, nowait = true }
   vim.keymap.set("n", "p", function()
-    open_artifact_from_change(change, "proposal", source_window)
+    open_artifact_from_change(change, "proposal", source_window, { close_summary = true })
   end, vim.tbl_extend("force", options, { desc = "OpenSpec: Open proposal artifact" }))
   vim.keymap.set("n", "d", function()
-    open_artifact_from_change(change, "design", source_window)
+    open_artifact_from_change(change, "design", source_window, { close_summary = true })
   end, vim.tbl_extend("force", options, { desc = "OpenSpec: Open design artifact" }))
   vim.keymap.set("n", "t", function()
-    open_artifact_from_change(change, "tasks", source_window)
+    open_artifact_from_change(change, "tasks", source_window, { close_summary = true })
   end, vim.tbl_extend("force", options, { desc = "OpenSpec: Open tasks artifact" }))
   vim.keymap.set("n", "s", function()
-    open_artifact_from_change(change, "specs", source_window)
+    open_artifact_from_change(change, "specs", source_window, { close_summary = true })
   end, vim.tbl_extend("force", options, { desc = "OpenSpec: Open spec artifacts" }))
 end
 

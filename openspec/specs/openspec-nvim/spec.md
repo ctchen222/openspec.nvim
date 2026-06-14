@@ -71,6 +71,42 @@ The plugin SHALL provide read-only views for OpenSpec task progress.
 - **AND** the report opens in dark mode with a light/dark toggle
 - **AND** it does not write generated HTML into the project tree.
 
+### Requirement: Summary artifact shortcuts
+
+The plugin SHALL provide buffer-local artifact shortcuts in the compact task summary for the selected active change.
+
+#### Scenario: Show summary artifact key hint
+
+- **WHEN** the task summary buffer is rendered for a selected active change
+- **THEN** it shows a concise key hint for `p`, `d`, `t`, and `s` artifact navigation.
+
+#### Scenario: Open active change artifacts by shortcut
+
+- **WHEN** the task summary buffer is focused
+- **AND** the user presses `p`, `d`, `t`, or `s`
+- **THEN** the plugin opens the selected active change's proposal, design, tasks, or spec artifact respectively
+- **AND** the summary floating window is closed after a successful open.
+
+#### Scenario: Close summary after spec delta selection
+
+- **WHEN** the selected active change has multiple spec delta artifacts
+- **AND** the user presses `s` in the task summary buffer
+- **AND** the user selects a target from the `vim.ui.select` dialog and it opens successfully
+- **THEN** the plugin closes the summary floating window only after the selection completes.
+
+#### Scenario: Notify missing active artifact
+
+- **WHEN** the user requests an active change artifact that does not exist
+- **THEN** the plugin notifies the user
+- **AND** it does not create a new artifact file
+- **AND** the summary window remains open.
+
+#### Scenario: Preserve existing summary mapping behavior
+
+- **WHEN** summary artifact shortcuts are installed
+- **THEN** the existing configured summary mapping remains unchanged
+- **AND** no new default keymaps or setup options are added.
+
 ### Requirement: Neovim-native workspace cockpit
 The plugin SHALL provide a Neovim-native workspace cockpit for the selected
 OpenSpec change that sits between the compact task summary and the full HTML
