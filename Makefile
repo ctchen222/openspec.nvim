@@ -15,6 +15,7 @@ test:
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/skills_spec.lua
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/artifacts_spec.lua
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/html_spec.lua
+	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/archive_search_spec.lua
 	nvim --headless -u NONE --cmd 'set shadafile=NONE' -l tests/ui_spec.lua
 
 validate:

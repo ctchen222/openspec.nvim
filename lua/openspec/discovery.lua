@@ -3,6 +3,22 @@ local util = require("openspec.util")
 
 local M = {}
 
+local function parse_archive_dir(change_path, opts, root)
+  local name = util.basename(change_path)
+  local archive_date, change_name = name:match("^(%d%d%d%d%-%d%d%-%d%d)%-(.+)$")
+
+  return {
+    name = change_name or name,
+    archive_name = name,
+    archive_date = archive_date,
+    archive_dir = opts.openspec.archive_dir,
+    path = util.normalize_path(change_path),
+    root = util.normalize_path(root),
+    tasks_path = util.normalize_path(util.join_path(change_path, opts.openspec.tasks_file)),
+    source_path = util.normalize_path(util.join_path(root, opts.openspec.changes_dir, change_name or name)),
+  }
+end
+
 function M.find_root(start_path)
   local opts = config.get()
   local path = util.normalize_path(start_path ~= "" and start_path or vim.fn.getcwd())
@@ -21,6 +37,34 @@ function M.find_root(start_path)
   end
 
   return nil
+end
+
+function M.scan_archived_changes(root)
+  local opts = config.get()
+  local changes_dir = util.join_path(root, opts.openspec.changes_dir, opts.openspec.archive_dir)
+  local paths = vim.fn.glob(util.join_path(changes_dir, "*"), false, true)
+  local changes = {}
+
+  for _, path in ipairs(paths) do
+    if util.is_dir(path) then
+      table.insert(changes, parse_archive_dir(path, opts, root))
+    end
+  end
+
+  table.sort(changes, function(a, b)
+    if a.archive_date and b.archive_date then
+      if a.archive_date ~= b.archive_date then
+        return a.archive_date > b.archive_date
+      end
+    elseif a.archive_date then
+      return true
+    elseif b.archive_date then
+      return false
+    end
+    return a.archive_name < b.archive_name
+  end)
+
+  return changes
 end
 
 function M.scan_active_changes(root)

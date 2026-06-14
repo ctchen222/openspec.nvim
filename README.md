@@ -55,6 +55,7 @@ Default keymaps:
 | `<leader>os` | Toggle task summary |
 | `<leader>ow` | Open workspace cockpit |
 | `<leader>oh` | Open a temporary HTML change report |
+| `<leader>oa` | Open archive search |
 
 Information ladder:
 
@@ -62,6 +63,8 @@ Information ladder:
 | --- | --- |
 | `<leader>os` | Fast task progress, next task, and top incomplete sections |
 | `<leader>ow` / `:OpenSpecWorkspace` | Native Neovim cockpit with artifact digest, Git context, local findings, and next upstream action |
+| `:OpenSpecArchiveSearch [query]` | Read-only archived change search with proposal/design/spec/tasks navigation (run again to close the window) |
+| `<leader>oa` | Open archive search for archived OpenSpec changes |
 | `<leader>oh` | Full browser-readable proposal, design, spec delta, and tasks dossier |
 
 The workspace cockpit is a digest, not a full artifact preview or picker. Use it
@@ -79,7 +82,9 @@ Commands:
 :OpenSpecContext
 :OpenSpecCurrent
 :OpenSpecImplement
+:OpenSpecArchiveSearch [query]
 ```
+:OpenSpecArchiveSearch 再次執行可關閉目前的 archive search 視窗；在 archive search/detail 視窗中可按 `q` 關閉。 
 
 Use `:OpenSpecTaskStatus {done|todo|wip|skipped} [line]` from an open `tasks.md`
 buffer to update a task checkbox. When `[line]` is omitted, the command uses
@@ -114,6 +119,7 @@ require("openspec").setup({
     summary = "<leader>os",
     html = "<leader>oh",
     workspace = "<leader>ow",
+    archive = "<leader>oa",
   },
   tasks = {
     include_skipped_in_total = false,
