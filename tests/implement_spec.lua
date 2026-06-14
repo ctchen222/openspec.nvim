@@ -125,6 +125,24 @@ assert(goal_prompt:find("^/goal "))
 assert(goal_prompt:find("/opsx:apply add-codex-goal-handoff", 1, true))
 assert(goal_summary:find("Completion criteria", 1, true))
 
+-- whole-change mode: goal objective says "all tasks" when task is nil
+assert(goal_prompt:find("Implement all tasks in this change in order", 1, true))
+assert(not goal_prompt:find("No explicit task selected", 1, true))
+
+-- single-task mode: goal objective mentions selected task when task is non-nil
+local task_obj = { section = "1. Implementation", text = "1.1 Do something" }
+local goal_task_prompt, _, goal_task_err = implement.build_goal_prompt("add-codex-goal-handoff", task_obj, codex_context_file)
+assert(goal_task_err == nil)
+assert(goal_task_prompt:find("Selected task", 1, true))
+assert(goal_task_prompt:find("1.1 Do something", 1, true))
+assert(not goal_task_prompt:find("Implement all tasks in this change in order", 1, true))
+
+-- apply prompt: "all tasks" when task is nil
+config.setup({ implement = { providers = { codex = { command_template = "codex {model_flag} {effort_flag} {initial_prompt}", model_flag = "--model {model}", effort_flag = "-c model_reasoning_effort={effort}" } } } })
+local all_tasks_cmd, all_tasks_err = implement.build_provider_command("codex", { provider = "codex", model = "gpt-test", effort = "high", goal = "off", task = nil }, codex_context_file)
+assert(all_tasks_err == nil)
+assert(all_tasks_cmd:find("Implement all tasks in this change in order", 1, true))
+
 config.setup({
   implement = {
     providers = {

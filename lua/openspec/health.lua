@@ -339,7 +339,14 @@ function M.evaluate(change, parsed, opts)
     cli_error_finding("disabled or not available", findings)
   end
 
-  local selected_task = parsed and (opts.task or parsed.next_task)
+  local selected_task = nil
+  if parsed then
+    if opts.fallback_to_next_task == false then
+      selected_task = opts.task
+    else
+      selected_task = opts.task or parsed.next_task
+    end
+  end
   local status = {
     cliAvailable = cli_available,
     enabled = cli.has_executable(),

@@ -50,4 +50,22 @@ assert(text:find("Stop Conditions", 1, true))
 assert(text:find("Validation:", 1, true))
 assert(text:find("Dirty entries:", 1, true))
 
+-- single-task mode: task selected
+assert(text:find("Implement only the selected task", 1, true))
+assert(not text:find("Implement all tasks in this change in order", 1, true))
+assert(text:find("Stop if implementation requires expanding the selected task scope", 1, true))
+assert(text:find("Stop if local changes cannot be mapped back to the selected task", 1, true))
+
+-- whole-change mode: no task selected
+local state_no_task = vim.tbl_extend("force", state, {})
+state_no_task.selected_task = nil
+local lines_no_task = context.lines(change, parsed, state_no_task)
+local text_no_task = table.concat(lines_no_task, "\n")
+
+assert(text_no_task:find("Implement all tasks in this change in order", 1, true))
+assert(not text_no_task:find("Implement only the selected task", 1, true))
+assert(not text_no_task:find("Stop if implementation requires expanding the selected task scope", 1, true))
+assert(not text_no_task:find("Stop if local changes cannot be mapped back to the selected task", 1, true))
+assert(text_no_task:find("Stop and request human input if scope needs expansion beyond the tasks listed", 1, true))
+
 print("context ok")
