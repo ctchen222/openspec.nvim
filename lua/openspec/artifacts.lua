@@ -1,6 +1,7 @@
 local util = require("openspec.util")
 
 local M = {}
+local collect_spec_artifacts
 
 local function change_path(change)
   if change.path and change.path ~= "" then
@@ -127,7 +128,54 @@ local function artifact(change, label, path)
   }
 end
 
-local function collect_spec_artifacts(change)
+local function artifact_target(change, kind, path, label, lnum)
+  local normalized = util.normalize_path(path)
+  return {
+    kind = kind,
+    path = normalized,
+    absolute_path = normalized,
+    display_path = relative_path(change, normalized),
+    relative_path = relative_path(change, normalized),
+    content = read_file(normalized),
+    label = label,
+    lnum = lnum,
+    present = util.is_file(normalized),
+  }
+end
+
+local function spec_targets(change, target_spec)
+  local specs = collect_spec_artifacts(change)
+  local targets = {}
+
+  for _, spec in ipairs(specs) do
+    table.insert(targets, artifact_target(change, "specs", spec.path, spec.label))
+  end
+
+  if not target_spec then
+    return targets
+  end
+
+  local selected = nil
+  local selector = tostring(target_spec)
+  for _, target in ipairs(targets) do
+    if target_spec == target.label or selector == target.relative_path or selector == target.label then
+      selected = target
+      break
+    end
+  end
+
+  if selected then
+    return { selected }
+  end
+
+  if type(target_spec) == "number" and target_spec >= 1 and target_spec <= #targets then
+    return { targets[target_spec] }
+  end
+
+  return {}
+end
+
+collect_spec_artifacts = function(change)
   local specs_dir = util.join_path(change_path(change), "specs")
   local paths = vim.fn.glob(util.join_path(specs_dir, "**", "*.md"), false, true)
   table.sort(paths)
@@ -171,25 +219,54 @@ function M.sections_needing_attention(parsed)
 end
 
 function M.collect(change, parsed)
-  local specs = collect_spec_artifacts(change)
+  local proposal = M.resolve_artifact_targets(change, "proposal")[1]
+  local design = M.resolve_artifact_targets(change, "design")[1]
+  local tasks_target = M.resolve_artifact_targets(change, "tasks")[1]
+  local spec_targets = M.resolve_artifact_targets(change, "specs")
   local base_path = change_path(change)
+  local specs_count = #spec_targets
+  local specs_names = spec_names(collect_spec_artifacts(change))
   local collected = {
-    proposal = artifact(change, "Proposal", util.join_path(base_path, "proposal.md")),
-    design = artifact(change, "Design", util.join_path(base_path, "design.md")),
-    tasks = artifact(change, "Tasks", change.tasks_path or util.join_path(base_path, "tasks.md")),
-    specs = specs,
-    specs_count = #specs,
-    specs_names = spec_names(specs),
+    proposal = proposal,
+    design = design,
+    tasks = tasks_target,
+    specs = spec_targets,
+    specs_count = specs_count,
+    specs_names = specs_names,
     specs_dir = {
       label = "Spec deltas",
       path = util.normalize_path(util.join_path(base_path, "specs")),
-      present = #specs > 0,
+      present = specs_count > 0,
       relative_path = "specs",
     },
   }
   collected.proposal.summary = proposal_summary(collected.proposal.content)
   collected.sections_needing_attention = M.sections_needing_attention(parsed)
   return collected
+end
+
+function M.resolve_artifact_targets(change, kind, opts)
+  opts = opts or {}
+  local target_kind = (kind or ""):lower()
+  local path = change_path(change)
+  if target_kind == "proposal" then
+    return { artifact_target(change, "proposal", util.join_path(path, "proposal.md")) }
+  end
+  if target_kind == "design" then
+    return { artifact_target(change, "design", util.join_path(path, "design.md")) }
+  end
+  if target_kind == "tasks" then
+    return { artifact_target(change, "tasks", change.tasks_path or util.join_path(path, "tasks.md")) }
+  end
+  if target_kind == "specs" or target_kind == "spec" then
+    return spec_targets(change, opts.spec or opts.label)
+  end
+  return {}
+end
+
+function M.resolve_artifact_target(change, kind, opts)
+  local targets = M.resolve_artifact_targets(change, kind, opts)
+  return targets[1]
 end
 
 function M.relative_path(change, path)

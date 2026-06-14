@@ -105,6 +105,31 @@ function M.html()
   end)
 end
 
+function M.archive_search(params)
+  local query = ""
+  if params and params.fargs and #params.fargs > 0 then
+    query = table.concat(params.fargs, " ")
+  end
+
+  if ui.close_archive_search() then
+    ui.close_archive_detail()
+    return
+  end
+
+  local buffer_path = vim.api.nvim_buf_get_name(0)
+  local root = discovery.find_root(buffer_path)
+  if not root then
+    root = discovery.find_root(vim.fn.getcwd())
+  end
+  if not root then
+    util.notify("No openspec/changes directory found from the current buffer or cwd.", vim.log.levels.WARN)
+    return
+  end
+
+  local changes = discovery.scan_archived_changes(root)
+  ui.open_archive_search(changes, query)
+end
+
 function M.workspace()
   with_parsed_change(function(change, parsed)
     local state = health.evaluate(change, parsed, {})
@@ -303,6 +328,11 @@ local function create_commands()
     force = true,
     nargs = "+",
   })
+  vim.api.nvim_create_user_command("OpenSpecArchiveSearch", M.archive_search, {
+    desc = "Open an archive search view for archived OpenSpec changes",
+    force = true,
+    nargs = "?",
+  })
   vim.api.nvim_create_user_command("OpenSpecCurrent", M.current, {
     desc = "Report current OpenSpec change health",
     force = true,
@@ -321,6 +351,7 @@ local function create_keymaps()
   vim.keymap.set("n", mappings.summary, M.summary, { desc = "OpenSpec: Task summary" })
   vim.keymap.set("n", mappings.html, M.html, { desc = "OpenSpec: HTML change report" })
   vim.keymap.set("n", mappings.workspace, M.workspace, { desc = "OpenSpec: Workspace cockpit" })
+  vim.keymap.set("n", mappings.archive, M.archive_search, { desc = "OpenSpec: Archive search" })
 end
 
 function M.setup(opts)

@@ -7,6 +7,7 @@ local defaults = {
     summary = "<leader>os",
     html = "<leader>oh",
     workspace = "<leader>ow",
+    archive = "<leader>oa",
   },
   openspec = {
     executable = "openspec",
