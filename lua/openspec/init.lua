@@ -175,6 +175,50 @@ local function refresh_parsed_change(change, fallback)
   return refreshed, nil
 end
 
+local function is_complete_payload(payload)
+  if not payload then
+    return false
+  end
+  if payload.isComplete or payload.complete then
+    return true
+  end
+  local state = payload.state or payload.status
+  return state == "complete" or state == "done" or state == "all_done"
+end
+
+local function is_change_complete(state)
+  local cli_state = state and state.cli or {}
+  return is_complete_payload(cli_state.status) or is_complete_payload(cli_state.instructions)
+end
+
+local function guard_completed_implement(change, state, selected_task)
+  if selected_task and selected_task.status == "done" then
+    util.notify(
+      "Selected task is already done for " .. change.name .. ". Run /opsx:verify " .. change.name .. " before archive.",
+      vim.log.levels.WARN
+    )
+    return true
+  end
+
+  if selected_task and selected_task.status == "skipped" then
+    util.notify(
+      "Selected task is skipped for " .. change.name .. ". Update the task status before implementing it.",
+      vim.log.levels.WARN
+    )
+    return true
+  end
+
+  if not selected_task and is_change_complete(state) then
+    util.notify(
+      "Implementation is already complete for " .. change.name .. ". Run /opsx:verify " .. change.name .. " before archive.",
+      vim.log.levels.WARN
+    )
+    return true
+  end
+
+  return false
+end
+
 function M.task_start(params)
   local lnum = line_arg(params)
   if lnum == false then
@@ -241,6 +285,9 @@ function M.implement(params)
       selected_task = select_task(parsed, vim.fn.line("."))
     end
     local state = health.evaluate(change, parsed, { task = selected_task, fallback_to_next_task = false })
+    if guard_completed_implement(change, state, selected_task) then
+      return
+    end
     local lines = context.lines(change, parsed, state)
     implement.start(change.name, selected_task, lines, params.fargs)
   end)
