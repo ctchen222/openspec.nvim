@@ -276,3 +276,7 @@ make helptags
 ```
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the manual smoke test checklist and release criteria.
+
+## License
+
+[MIT](LICENSE)
