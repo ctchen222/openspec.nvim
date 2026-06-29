@@ -1,12 +1,44 @@
 # openspec.nvim
 
-OpenSpec task progress for Neovim.
+Neovim control surface for OpenSpec workflows.
 
-`openspec.nvim` keeps OpenSpec markdown artifacts as the source of truth and adds a Neovim reading layer for OpenSpec changes: a quick task summary, a native workspace cockpit, and a temporary HTML change report.
+`openspec.nvim` keeps OpenSpec markdown artifacts as the source of truth while
+bringing change status, task progress, artifact context, validation signals, and
+implementation handoffs into Neovim.
+
+It is built for developers who use OpenSpec, Codex-style agents, or
+spec-driven development and want the current change lifecycle to stay close to
+the code they are editing.
 
 ## Current status
 
-Prototype plugin. The first public surface focuses on OpenSpec task tracking. The code is intentionally small and dependency-free so the workflow can be refined before adding Telescope, Trouble, or schema-aware artifact navigation.
+Early public plugin. The current release focuses on OpenSpec task tracking,
+workspace awareness, temporary change reports, archive search, and explicit
+implementation-session launchers. The baseline stays dependency-free and uses
+built-in Neovim APIs.
+
+## Demo
+
+`:OpenSpecImplement` resolves the current change context, selects the provider
+and model from your profile, and launches a new implementation session in a
+tmux or Neovim split without manual copy-paste.
+
+![OpenSpecImplement Demo](OpenSpecImplement%20demo.gif)
+
+## Why this exists
+
+OpenSpec changes usually span several places at once:
+
+```text
+proposal.md / design.md / tasks.md
+        -> Git branch and worktree
+        -> Neovim implementation loop
+        -> validation and AI-agent handoff
+```
+
+`openspec.nvim` makes that state visible from inside Neovim. It does not replace
+the OpenSpec CLI, Git, or your AI coding agent. It gives them a shared,
+editor-native control surface grounded in the same repo-local artifacts.
 
 ## Features
 
@@ -26,25 +58,33 @@ Prototype plugin. The first public surface focuses on OpenSpec task tracking. Th
 - Keep OpenSpec artifacts as the source of truth while making terminal-side OpenSpec actions (apply/verify/archive) explicit and auditable.
 - Start implementation sessions with a forced provider/model context through `:OpenSpecImplement`.
 
-## Demo
-
-`:OpenSpecImplement` resolves the current change context, selects the provider and model from your profile, and launches a new implementation session in a tmux or Neovim split — no manual copy-paste required.
-
-![OpenSpecImplement Demo](OpenSpecImplement%20demo.gif)
-
 ## Installation
 
-With `lazy.nvim` from a local checkout:
+With `lazy.nvim`:
+
+```lua
+{
+  "ctchen222/openspec.nvim",
+  opts = {},
+}
+```
+
+For local development:
 
 ```lua
 {
   dir = "/Users/ctchen/Development/project/openspec.nvim",
   name = "openspec.nvim",
-  config = function()
-    require("openspec").setup()
-  end,
+  opts = {},
 }
 ```
+
+Requirements:
+
+- Neovim 0.10 or newer.
+- An OpenSpec project with `openspec/changes`.
+- Optional: `openspec` CLI, Git, tmux, Codex, Claude, or opencode for the
+  richer workflow surfaces.
 
 ## Usage
 
@@ -84,7 +124,9 @@ Commands:
 :OpenSpecImplement
 :OpenSpecArchiveSearch [query]
 ```
-:OpenSpecArchiveSearch 再次執行可關閉目前的 archive search 視窗；在 archive search/detail 視窗中可按 `q` 關閉。 
+
+Run `:OpenSpecArchiveSearch` again to close the current archive search window.
+Inside archive search/detail windows, press `q` to close the window.
 
 Use `:OpenSpecTaskStatus {done|todo|wip|skipped} [line]` from an open `tasks.md`
 buffer to update a task checkbox. When `[line]` is omitted, the command uses
@@ -108,6 +150,24 @@ Agent collaboration pattern:
   `/skill:openspec-apply-change <change>`.
 - `/opsx:verify <change>` and `/opsx:archive <change>` are recommended when tasks are complete and validation passes.
 - Use `:OpenSpecContext` when you need a focused handoff buffer for terminal automation.
+
+## Scope
+
+`openspec.nvim` is intentionally OpenSpec-specific.
+
+It is:
+
+- a Neovim-native status and context surface for OpenSpec projects;
+- a way to keep proposal, design, specs, tasks, Git state, and agent handoffs
+  aligned;
+- a small dependency-free base that can grow optional integrations later.
+
+It is not:
+
+- a generic AI chat plugin;
+- a project-management dashboard;
+- a replacement for OpenSpec CLI lifecycle commands;
+- the source of truth for tasks or specs.
 
 ## Configuration
 
