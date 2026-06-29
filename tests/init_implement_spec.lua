@@ -27,14 +27,20 @@ vim.fn.writefile({
   "# Tasks",
   "- [ ] 1.1 First task",
   "- [ ] 1.2 Second task",
+  "- [x] 1.3 Done task",
+  "- [-] 1.4 Skipped task",
 }, tasks_path)
 vim.fn.writefile({ "notes" }, root .. "/notes.md")
 
 local original_context_lines = context.lines
 local original_evaluate = health.evaluate
 local original_start = implement.start
+local original_notify = vim.notify
 local last_evaluate = nil
 local last_start = nil
+local notifications = {}
+local cli_status = nil
+local cli_instructions = nil
 
 context.lines = function(_change, _parsed, state)
   return { state.selected_task and state.selected_task.text or "whole-change" }
@@ -46,9 +52,17 @@ health.evaluate = function(_change, _parsed, opts)
     selected_task = opts.task,
     findings = {},
     git = { dirty = {}, branch = "feature/implement-demo" },
-    cli = { validation = { enabled = false, ok = true } },
+    cli = {
+      status = cli_status,
+      instructions = cli_instructions,
+      validation = { enabled = false, ok = true },
+    },
     recommendations = {},
   }
+end
+
+vim.notify = function(message, level, opts)
+  table.insert(notifications, { message = message, level = level, opts = opts })
 end
 
 implement.start = function(change_name, task, lines, fargs)
@@ -60,16 +74,24 @@ implement.start = function(change_name, task, lines, fargs)
   }
 end
 
-local function run_implement(path, line)
+local function run_implement(path, line, opts)
+  opts = opts or {}
   last_evaluate = nil
   last_start = nil
+  notifications = {}
+  cli_status = opts.cli_status
+  cli_instructions = opts.cli_instructions
   vim.cmd("edit " .. vim.fn.fnameescape(path))
   if line then
     vim.api.nvim_win_set_cursor(0, { line, 0 })
   end
   openspec.implement({ fargs = { "codex" } })
   assert(last_evaluate ~= nil)
-  assert(last_start ~= nil)
+  if opts.expect_launch == false then
+    assert(last_start == nil)
+  else
+    assert(last_start ~= nil)
+  end
   return last_evaluate, last_start
 end
 
@@ -93,8 +115,35 @@ assert(off_task_opts.fallback_to_next_task == false)
 assert(off_task_start.task == nil)
 assert(off_task_start.lines[1] == "whole-change")
 
+local done_opts = run_implement(tasks_path, 4, { expect_launch = false })
+assert(done_opts.fallback_to_next_task == false)
+assert(#notifications == 1)
+assert(notifications[1].message:find("already done", 1, true))
+
+local skipped_opts = run_implement(tasks_path, 5, { expect_launch = false })
+assert(skipped_opts.fallback_to_next_task == false)
+assert(#notifications == 1)
+assert(notifications[1].message:find("skipped", 1, true))
+
+local complete_status_opts = run_implement(tasks_path, 1, {
+  expect_launch = false,
+  cli_status = { isComplete = true },
+})
+assert(complete_status_opts.fallback_to_next_task == false)
+assert(#notifications == 1)
+assert(notifications[1].message:find("already complete", 1, true))
+
+local all_done_instructions_opts = run_implement(root .. "/notes.md", 1, {
+  expect_launch = false,
+  cli_instructions = { state = "all_done" },
+})
+assert(all_done_instructions_opts.fallback_to_next_task == false)
+assert(#notifications == 1)
+assert(notifications[1].message:find("already complete", 1, true))
+
 context.lines = original_context_lines
 health.evaluate = original_evaluate
 implement.start = original_start
+vim.notify = original_notify
 
 print("init implement ok")
