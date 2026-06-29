@@ -14,9 +14,11 @@ local BUILTIN_ADAPTERS = {
     goal = "off",
   },
   claude = {
-    command_template = "claude {model_flag} {effort_flag} {context_prompt}",
+    -- The upstream `claude` CLI has no `--effort` flag, so the builtin does not
+    -- render one. effort is still tracked for the launch preview/profiles; set
+    -- a custom effort_flag via config if your claude wrapper accepts one.
+    command_template = "claude {model_flag} {context_prompt}",
     model_flag = "--model {model}",
-    effort_flag = "--effort {effort}",
     model = "sonnet",
     effort = "high",
     layout = "auto",
@@ -592,7 +594,48 @@ function M.build_goal_prompt(change_name, task, context_file)
   return "/goal " .. objective, objective, nil
 end
 
+-- Claude model aliases accepted by the `claude` CLI --model flag, plus the
+-- family substrings that appear in every full Anthropic model id
+-- (e.g. claude-opus-4-8, claude-sonnet-4-6, claude-haiku-4-5, claude-fable-5).
+local CLAUDE_MODEL_ALIASES = {
+  opus = true,
+  sonnet = true,
+  haiku = true,
+  default = true,
+  opusplan = true,
+}
+local CLAUDE_MODEL_FAMILIES = { "opus", "sonnet", "haiku", "fable", "mythos" }
+
+local function is_known_claude_model(model)
+  if not model or model == "" then
+    return false
+  end
+  local normalized = trim(tostring(model):lower())
+  if CLAUDE_MODEL_ALIASES[normalized] then
+    return true
+  end
+  if normalized:sub(1, 7) == "claude-" then
+    return true
+  end
+  for _, family in ipairs(CLAUDE_MODEL_FAMILIES) do
+    if normalized:find(family, 1, true) then
+      return true
+    end
+  end
+  return false
+end
+
 function M.validate_settings(settings, opts)
+  if settings.provider == "claude" then
+    if not is_known_claude_model(settings.model) then
+      return nil,
+        "Claude model not recognized: " .. tostring(settings.model) .. ". "
+          .. "Use an alias (opus, sonnet, haiku, default) or a full claude model id "
+          .. "(e.g. claude-opus-4-8). Tip: pass model=opus explicitly so the default "
+          .. "profile's codex model does not bleed into the claude launch."
+    end
+  end
+
   if settings.provider == "codex" then
     local catalog, err = M._load_codex_models(opts)
     if not catalog then
