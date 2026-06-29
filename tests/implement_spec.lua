@@ -112,12 +112,19 @@ assert(claude_command_err == nil)
 assert(claude_command:find("claude", 1, true))
 assert(claude_command:find("--model", 1, true))
 assert(claude_command:find("sonnet-test", 1, true))
-assert(claude_command:find("--effort", 1, true))
-assert(claude_command:find("max", 1, true))
+-- The claude builtin no longer injects `--effort` (the claude CLI has no such flag).
+assert(not claude_command:find("--effort", 1, true))
 assert(claude_command:find(codex_context_file, 1, true))
 assert(not claude_command:find("codex context line 1", 1, true))
 assert(not claude_command:find("|", 1, true))
 assert(not claude_command:find("cat ", 1, true))
+
+-- Claude model validation: aliases and full claude ids pass; non-claude models are rejected.
+assert(implement.validate_settings({ provider = "claude", model = "opus", effort = "high", goal = "off" }, {}))
+assert(implement.validate_settings({ provider = "claude", model = "claude-opus-4-8", effort = "high", goal = "off" }, {}))
+local claude_bad_model, claude_bad_model_err = implement.validate_settings({ provider = "claude", model = "gpt-5.4", effort = "high", goal = "off" }, {})
+assert(claude_bad_model == nil)
+assert(claude_bad_model_err:find("Claude model not recognized", 1, true))
 
 local goal_prompt, goal_summary, goal_err = implement.build_goal_prompt("add-codex-goal-handoff", nil, codex_context_file)
 assert(goal_err == nil)
@@ -241,7 +248,7 @@ assert(invalid_effort == nil)
 assert(invalid_effort_err:find("Unsupported Codex effort", 1, true))
 assert(invalid_effort_err:find("Available efforts for this model", 1, true))
 
-local non_codex_goal_ok, non_codex_goal_err = implement.validate_settings({ provider = "claude", model = "x", effort = "high", goal = "auto" }, {})
+local non_codex_goal_ok, non_codex_goal_err = implement.validate_settings({ provider = "claude", model = "opus", effort = "high", goal = "auto" }, {})
 assert(non_codex_goal_ok == nil)
 assert(non_codex_goal_err:find("Goal handoff is only supported", 1, true))
 
